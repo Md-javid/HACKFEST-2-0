@@ -352,16 +352,11 @@ Key endpoints:
 > Violations — severity-filtered list with AI agent remediation
 
 ---
-
-## License
-
-MIT License — see [LICENSE](LICENSE)
-
 ---
 
 <div align="center">
 
-Built with  for **HACKFEST 2.0**
+Built with :heart: FOR EVERYONE!
 
 **Stack:** Python  FastAPI  React  TypeScript  MongoDB  Google Gemini AI  Docker
 
