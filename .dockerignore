@@ -1,0 +1,19 @@
+# Root .dockerignore
+.git
+.gitignore
+*.md
+node_modules
+frontend/node_modules
+frontend/dist
+frontend/.vite
+backend/__pycache__
+backend/**/__pycache__
+backend/**/*.pyc
+backend/.env
+backend/uploads/*
+!backend/uploads/.gitkeep
+uploads
+.vscode
+.idea
+*.log
+*.tmp
