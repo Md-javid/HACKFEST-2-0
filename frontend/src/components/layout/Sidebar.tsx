@@ -5,7 +5,7 @@ import {
   Shield,
   AlertTriangle,
   FileText,
-  Activity,
+  Brain,
   ClipboardList,
   Users,
   Database,
@@ -17,7 +17,7 @@ const navItems = [
   { href: "/violations", label: "Violations", icon: AlertTriangle },
   { href: "/policies", label: "Policies", icon: FileText },
   { href: "/records", label: "Records", icon: Database },
-  { href: "/monitoring", label: "Monitoring", icon: Activity },
+  { href: "/monitoring", label: "Agent Center", icon: Brain },
   { href: "/reports", label: "Reports", icon: ClipboardList },
   { href: "/users", label: "Users", icon: Users },
 ];

@@ -24,6 +24,7 @@ import { listUsers, updateUserRole, deleteUser, type UserData } from "@/lib/api"
 
 const ROLE_CONFIG: Record<string, { color: string; icon: typeof Shield; label: string }> = {
   admin: { color: "text-red-400 bg-red-500/10 border-red-500/20", icon: Crown, label: "Admin" },
+  compliance_officer: { color: "text-purple-400 bg-purple-500/10 border-purple-500/20", icon: Shield, label: "Compliance Officer" },
   analyst: { color: "text-blue-400 bg-blue-500/10 border-blue-500/20", icon: Shield, label: "Analyst" },
   viewer: { color: "text-green-400 bg-green-500/10 border-green-500/20", icon: Eye, label: "Viewer" },
 };
@@ -92,7 +93,7 @@ export default function UsersPage() {
   const stats = {
     total: users.length,
     admins: users.filter((u) => u.role === "admin").length,
-    analysts: users.filter((u) => u.role === "analyst").length,
+    officers: users.filter((u) => u.role === "compliance_officer" || u.role === "analyst").length,
     viewers: users.filter((u) => u.role === "viewer").length,
   };
 
@@ -145,7 +146,7 @@ export default function UsersPage() {
             {[
               { label: "Total Users", value: stats.total, color: "from-blue-500 to-cyan-400" },
               { label: "Admins", value: stats.admins, color: "from-red-500 to-rose-400" },
-              { label: "Analysts", value: stats.analysts, color: "from-purple-500 to-pink-400" },
+              { label: "Officers", value: stats.officers, color: "from-purple-500 to-pink-400" },
               { label: "Viewers", value: stats.viewers, color: "from-green-500 to-emerald-400" },
             ].map((s, i) => (
               <GlassCard key={s.label}>
@@ -272,7 +273,7 @@ export default function UsersPage() {
                                 Role <ChevronDown size={12} />
                               </button>
                               <div className="absolute right-0 top-full mt-1 w-36 glass-card !p-1 rounded-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
-                                {["admin", "analyst", "viewer"].map((r) => (
+                                {["admin", "compliance_officer", "analyst", "viewer"].map((r) => (
                                   <button
                                     key={r}
                                     onClick={() => handleRoleChange(u._id, r)}

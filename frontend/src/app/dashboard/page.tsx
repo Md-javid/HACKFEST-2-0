@@ -37,7 +37,7 @@ import AnimatedCounter from "@/components/ui/AnimatedCounter";
 import SeverityBadge from "@/components/ui/SeverityBadge";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import AuthGuard from "@/components/layout/AuthGuard";
-import { getDashboardStats, aiOverview } from "@/lib/api";
+import { getDashboardStats, aiOverview, agentSystemStatus } from "@/lib/api";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -92,15 +92,17 @@ export default function DashboardPage() {
   const [aiOverviewData, setAiOverviewData] = useState<any>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiRequested, setAiRequested] = useState(false);
+  const [agentStatus, setAgentStatus] = useState<any>(null);
 
   const fetchAIOverview = async () => {
     setAiRequested(true);
     setAiLoading(true);
+    setAiOverviewData(null);
     try {
       const res = await aiOverview();
       setAiOverviewData(res.data);
     } catch {
-      // silently fail if gemini not configured
+      setAiOverviewData({ status: "error" });
     } finally {
       setAiLoading(false);
     }
@@ -122,6 +124,8 @@ export default function DashboardPage() {
 
   useEffect(() => {
     fetchStats();
+    fetchAIOverview();
+    agentSystemStatus().then(r => setAgentStatus(r.data)).catch(() => {});
     const interval = setInterval(() => fetchStats(), 60000);
     return () => clearInterval(interval);
   }, [fetchStats]);
@@ -273,7 +277,7 @@ export default function DashboardPage() {
                           Violation Trend
                         </h3>
                         <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
-                          Cumulative violations over the last 7 days
+                          Daily violations over the last 7 days
                         </p>
                       </div>
                       <div className="flex items-center gap-2">
@@ -453,13 +457,18 @@ export default function DashboardPage() {
                     </div>
                   )}
 
-                  {!aiLoading && aiRequested && !aiOverviewData && (
+                  {!aiLoading && aiRequested && (!aiOverviewData || aiOverviewData?.status === "error") && (
                     <div className="flex items-center gap-3 py-3 px-4 rounded-xl"
                       style={{ background: "rgba(129,140,248,0.08)", border: "1px dashed rgba(129,140,248,0.2)" }}>
                       <Sparkles size={16} style={{ color: "#818cf8" }} />
-                      <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-                        Set <code className="px-1 rounded" style={{ background: "rgba(255,255,255,0.08)", color: "#a5b4fc" }}>GEMINI_API_KEY</code> in your <code className="px-1 rounded" style={{ background: "rgba(255,255,255,0.08)", color: "#a5b4fc" }}>backend/.env</code> to enable Gemini AI Overview.
-                      </p>
+                      <div>
+                        <p className="text-sm font-semibold" style={{ color: "var(--text-muted)" }}>
+                          Gemini AI is not responding.
+                        </p>
+                        <p className="text-xs mt-1" style={{ color: "rgba(165,180,252,0.5)" }}>
+                          Set <code className="px-1 rounded" style={{ background: "rgba(255,255,255,0.08)", color: "#a5b4fc" }}>GEMINI_API_KEY</code> in <code className="px-1 rounded" style={{ background: "rgba(255,255,255,0.08)", color: "#a5b4fc" }}>backend/.env</code> — then click Refresh AI.
+                        </p>
+                      </div>
                     </div>
                   )}
 
@@ -588,7 +597,7 @@ export default function DashboardPage() {
                           </div>
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium truncate" style={{ color: "var(--text-primary)" }}>
-                              {v.violation_description ?? v.condition ?? "Compliance violation detected"}
+                              {v.explanation ?? v.violated_rule ?? v.condition ?? "Compliance violation detected"}
                             </p>
                             <p className="text-xs mt-0.5 truncate" style={{ color: "var(--text-muted)" }}>
                               Record: {v.record_id} &middot; Rule: {v.rule_id}
@@ -605,6 +614,60 @@ export default function DashboardPage() {
                     </div>
                   )}
                 </motion.div>
+
+                {/* ── Agent Status Widget ── */}
+                {agentStatus && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.55, duration: 0.4 }}
+                    className="col-span-12 card p-5 mt-4"
+                  >
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: "rgba(139,92,246,0.15)" }}>
+                          <Brain size={14} style={{ color: "#8b5cf6" }} />
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>Agent Control Center</h3>
+                          <p className="text-xs" style={{ color: "var(--text-muted)" }}>Multi-agent AI system status</p>
+                        </div>
+                      </div>
+                      <a href="/monitoring" className="flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors"
+                        style={{ color: "#8b5cf6", background: "rgba(139,92,246,0.1)", border: "1px solid rgba(139,92,246,0.2)" }}>
+                        Open <ChevronRight size={12} />
+                      </a>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
+                      {(agentStatus.agents || []).map((a: any) => (
+                        <div key={a.type} className="p-3 rounded-xl text-center" style={{ background: "var(--bg-hover)", border: "1px solid var(--border)" }}>
+                          <p className="text-lg mb-0.5">{a.icon}</p>
+                          <p className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>{a.name?.replace("Agent","")}</p>
+                          <p className="text-xs" style={{ color: "var(--text-muted)" }}>{a.actions_taken} actions</p>
+                        </div>
+                      ))}
+                      <div className="p-3 rounded-xl text-center" style={{ background: "var(--bg-hover)", border: "1px solid var(--border)" }}>
+                        <p className="text-xl font-bold" style={{ color: "#22d3ee" }}>{agentStatus.agent_log?.total_entries || 0}</p>
+                        <p className="text-xs" style={{ color: "var(--text-muted)" }}>Total Actions</p>
+                      </div>
+                      <div className="p-3 rounded-xl text-center" style={{ background: "var(--bg-hover)", border: "1px solid var(--border)" }}>
+                        <p className="text-xl font-bold" style={{ color: "#4ade80" }}>{agentStatus.agent_log?.resolves || 0}</p>
+                        <p className="text-xs" style={{ color: "var(--text-muted)" }}>Auto-Resolved</p>
+                      </div>
+                      <div className="p-3 rounded-xl text-center" style={{ background: "var(--bg-hover)", border: "1px solid var(--border)" }}>
+                        <p className="text-xl font-bold" style={{ color: "#fb923c" }}>{agentStatus.violations?.escalated || 0}</p>
+                        <p className="text-xs" style={{ color: "var(--text-muted)" }}>Escalated</p>
+                      </div>
+                      <div className="p-3 rounded-xl text-center" style={{ background: "var(--bg-hover)", border: "1px solid var(--border)" }}>
+                        <div className="flex items-center justify-center gap-1 mb-0.5">
+                          <span className="w-2 h-2 rounded-full bg-green-400 inline-block animate-pulse" />
+                          <span className="text-xs font-medium text-green-400">Live</span>
+                        </div>
+                        <p className="text-xs" style={{ color: "var(--text-muted)" }}>System Active</p>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
 
               </>
             )}

@@ -9,6 +9,12 @@ import {
   XCircle,
   Eye,
   Filter,
+  Bot,
+  Zap,
+  Loader2,
+  TrendingUp,
+  ListChecks,
+  ChevronRight,
 } from "lucide-react";
 import Sidebar from "@/components/layout/Sidebar";
 import Topbar from "@/components/layout/Topbar";
@@ -18,7 +24,7 @@ import StatusBadge from "@/components/ui/StatusBadge";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import Modal from "@/components/ui/Modal";
 import AuthGuard from "@/components/layout/AuthGuard";
-import { listViolations, violationAction, getViolation } from "@/lib/api";
+import { listViolations, violationAction, getViolation, agentRemediate, agentRemediateBatch } from "@/lib/api";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -29,6 +35,13 @@ export default function ViolationsPage() {
   const [detailData, setDetailData] = useState<any>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [filter, setFilter] = useState({ status: "", severity: "" });
+  // Agent state
+  const [agentLoading, setAgentLoading] = useState<string | null>(null); // violation_id being processed
+  const [agentResult, setAgentResult] = useState<any>(null);
+  const [agentModalOpen, setAgentModalOpen] = useState(false);
+  const [batchRunning, setBatchRunning] = useState(false);
+  const [batchResult, setBatchResult] = useState<any>(null);
+  const [batchModalOpen, setBatchModalOpen] = useState(false);
 
   const fetchViolations = async () => {
     setLoading(true);
@@ -56,6 +69,36 @@ export default function ViolationsPage() {
       if (modalOpen) setModalOpen(false);
     } catch (e) {
       console.error(e);
+    }
+  };
+
+  const handleAgentRemediate = async (violationId: string) => {
+    setAgentLoading(violationId);
+    try {
+      const res = await agentRemediate(violationId);
+      setAgentResult(res.data);
+      setAgentModalOpen(true);
+      fetchViolations();
+    } catch (e: any) {
+      setAgentResult({ status: "error", final_answer: e?.response?.data?.detail || String(e), violation_id: violationId, actions_taken: [], steps: [], score_before: 0, score_after: 0 });
+      setAgentModalOpen(true);
+    } finally {
+      setAgentLoading(null);
+    }
+  };
+
+  const handleBatchRemediate = async () => {
+    setBatchRunning(true);
+    try {
+      const res = await agentRemediateBatch("critical");
+      setBatchResult(res.data);
+      setBatchModalOpen(true);
+      fetchViolations();
+    } catch (e: any) {
+      setBatchResult({ error: e?.response?.data?.detail || String(e) });
+      setBatchModalOpen(true);
+    } finally {
+      setBatchRunning(false);
     }
   };
 
@@ -126,6 +169,20 @@ export default function ViolationsPage() {
             <span className="text-xs text-gray-400 ml-2">
               {violations.length} violation{violations.length !== 1 ? "s" : ""}
             </span>
+            {/* Batch Agent Button */}
+            <motion.button
+              whileHover={{ scale: 1.04 }}
+              whileTap={{ scale: 0.96 }}
+              onClick={handleBatchRemediate}
+              disabled={batchRunning}
+              className="ml-auto flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all disabled:opacity-50"
+              style={{ background: "rgba(139,92,246,0.15)", color: "#a78bfa", border: "1px solid rgba(139,92,246,0.3)" }}
+            >
+              {batchRunning
+                ? <><Loader2 size={14} className="animate-spin" /> Running Agent...</>
+                : <><Zap size={14} /> Run Agent on All Critical</>
+              }
+            </motion.button>
           </motion.div>
 
           {/* Violations List */}
@@ -176,13 +233,13 @@ export default function ViolationsPage() {
                                 </span>
                               )}
                             </div>
-                            {/* Rule */}
-                            <p className="text-sm text-white/80 font-medium mb-1">
-                              {v.violated_rule}
+                            {/* Human-readable explanation as main headline */}
+                            <p className="text-sm text-white/85 font-medium mb-1 leading-snug">
+                              {v.explanation || v.violated_rule || "Compliance violation detected"}
                             </p>
-                            {/* Explanation */}
-                            <p className="text-xs text-gray-400 line-clamp-2">
-                              {v.explanation}
+                            {/* Rule as sub-text */}
+                            <p className="text-xs line-clamp-1" style={{ color: "rgba(165,180,252,0.55)" }}>
+                              Rule: {v.violated_rule}
                             </p>
                             {/* Meta */}
                             <div className="flex items-center gap-4 mt-3 text-[11px] text-gray-400">
@@ -211,6 +268,19 @@ export default function ViolationsPage() {
                             </motion.button>
                             {v.status === "open" && (
                               <>
+                                {/* AI Agent Remediate */}
+                                <motion.button
+                                  whileHover={{ scale: 1.1 }}
+                                  whileTap={{ scale: 0.95 }}
+                                  onClick={() => handleAgentRemediate(v.violation_id)}
+                                  disabled={agentLoading === v.violation_id}
+                                  className="p-2 rounded-xl hover:bg-purple-500/10 text-gray-400 hover:text-purple-400 transition-colors disabled:opacity-50"
+                                  title="AI Auto-Remediate"
+                                >
+                                  {agentLoading === v.violation_id
+                                    ? <Loader2 size={16} className="animate-spin text-purple-400" />
+                                    : <Bot size={16} />}
+                                </motion.button>
                                 <motion.button
                                   whileHover={{ scale: 1.1 }}
                                   whileTap={{ scale: 0.95 }}
@@ -276,106 +346,152 @@ export default function ViolationsPage() {
           maxWidth="max-w-3xl"
         >
           {detailData ? (
-            <div className="space-y-6">
-              {/* Violation Info */}
-              <div>
-                <div className="flex items-center gap-2 mb-3">
-                  <SeverityBadge severity={detailData.violation?.severity} />
-                  <StatusBadge status={detailData.violation?.status} />
-                  <span className="text-xs font-mono text-gray-400">
-                    {detailData.violation?.violation_id}
+            <div className="space-y-4">
+              {/* ── Header Row ── */}
+              <div className="flex flex-wrap items-center gap-2">
+                <SeverityBadge severity={detailData.violation?.severity} />
+                <StatusBadge status={detailData.violation?.status} />
+                <span className="text-xs font-mono" style={{ color: "var(--text-muted)" }}>
+                  {detailData.violation?.violation_id}
+                </span>
+                {detailData.violation?.detected_at && (
+                  <span className="text-xs ml-auto" style={{ color: "var(--text-muted)" }}>
+                    Detected: {new Date(detailData.violation.detected_at).toLocaleString()}
                   </span>
-                </div>
-                <h3 className="font-semibold mb-2">
-                  {detailData.violation?.violated_rule}
-                </h3>
-                <p className="text-sm text-gray-500">{detailData.violation?.explanation}</p>
+                )}
               </div>
 
-              {/* Confidence */}
-              <div className="glass-card !p-4">
-                <h4 className="text-xs text-gray-400 uppercase tracking-wider mb-2">
-                  AI Confidence Score
-                </h4>
-                <div className="flex items-center gap-4">
-                  <div className="flex-1 h-3 bg-white/5 rounded-full overflow-hidden">
-                    <motion.div
-                      className="h-full rounded-full"
-                      style={{
-                        background:
-                          detailData.violation?.confidence_score >= 0.8
-                            ? "#ef4444"
-                            : detailData.violation?.confidence_score >= 0.6
-                            ? "#f59e0b"
-                            : "#3b82f6",
-                      }}
-                      initial={{ width: 0 }}
-                      animate={{
-                        width: `${(detailData.violation?.confidence_score || 0) * 100}%`,
-                      }}
-                      transition={{ duration: 1 }}
-                    />
-                  </div>
-                  <span className="font-bold">
-                    {((detailData.violation?.confidence_score || 0) * 100).toFixed(0)}%
-                  </span>
-                </div>
+              {/* ── Rule Violated ── */}
+              <div className="p-3 rounded-xl" style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.15)" }}>
+                <p className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: "#f87171" }}>
+                  Rule Violated
+                </p>
+                <p className="text-sm font-medium" style={{ color: "rgba(255,255,255,0.85)" }}>
+                  {detailData.violation?.violated_rule || detailData.violation?.rule_condition || "Compliance rule not satisfied"}
+                </p>
+                {detailData.violation?.policy_reference && (
+                  <p className="text-xs mt-1" style={{ color: "rgba(165,180,252,0.7)" }}>
+                    Reference: {detailData.violation.policy_reference}
+                  </p>
+                )}
               </div>
 
-              {/* Suggested Remediation */}
-              <div className="glass-card !p-4">
-                <h4 className="text-xs text-gray-400 uppercase tracking-wider mb-2">
-                  Suggested Remediation
-                </h4>
-                <p className="text-sm text-green-300/80">
-                  {detailData.violation?.suggested_remediation}
+              {/* ── What Happened ── */}
+              <div className="p-4 rounded-xl" style={{ background: "rgba(251,191,36,0.06)", border: "1px solid rgba(251,191,36,0.18)" }}>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-base">🚨</span>
+                  <h4 className="text-sm font-bold" style={{ color: "#fbbf24" }}>What Happened?</h4>
+                </div>
+                <p className="text-sm leading-relaxed" style={{ color: "rgba(255,255,255,0.82)" }}>
+                  {detailData.violation?.explanation || "This record does not satisfy the required compliance rule. Review the record details below."}
                 </p>
               </div>
 
-              {/* Policy Reference */}
-              {detailData.violation?.policy_reference && (
-                <div className="glass-card !p-4">
-                  <h4 className="text-xs text-gray-400 uppercase tracking-wider mb-2">
-                    Policy Reference
-                  </h4>
-                  <p className="text-sm text-blue-300/80">
-                    {detailData.violation.policy_reference}
+              {/* ── Why it Matters ── */}
+              {detailData.violation?.risk_assessment && (
+                <div className="p-4 rounded-xl" style={{ background: "rgba(239,68,68,0.06)", border: "1px solid rgba(239,68,68,0.15)" }}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-base">⚠️</span>
+                    <h4 className="text-sm font-bold" style={{ color: "#f87171" }}>Why Does This Matter?</h4>
+                  </div>
+                  <p className="text-sm leading-relaxed" style={{ color: "rgba(255,255,255,0.75)" }}>
+                    {detailData.violation.risk_assessment}
                   </p>
                 </div>
               )}
 
-              {/* Record Data */}
-              {detailData.record && (
-                <div className="glass-card !p-4">
-                  <h4 className="text-xs text-gray-400 uppercase tracking-wider mb-2">
-                    Record Data ({detailData.record.record_id})
-                  </h4>
-                  <pre className="text-xs text-gray-500 overflow-x-auto">
-                    {JSON.stringify(detailData.record.data, null, 2)}
-                  </pre>
+              {/* ── How to Fix It ── */}
+              {detailData.violation?.suggested_remediation && (
+                <div className="p-4 rounded-xl" style={{ background: "rgba(52,211,153,0.06)", border: "1px solid rgba(52,211,153,0.18)" }}>
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-base">✅</span>
+                    <h4 className="text-sm font-bold" style={{ color: "#34d399" }}>How to Fix It</h4>
+                  </div>
+                  <div className="space-y-2">
+                    {detailData.violation.suggested_remediation
+                      .split(/\n+/)
+                      .map((s: string) => s.trim())
+                      .filter((s: string) => s.length > 0)
+                      .map((step: string, i: number) => (
+                        <div key={i} className="flex items-start gap-2.5 text-sm">
+                          <span
+                            className="shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold mt-0.5"
+                            style={{ background: "rgba(52,211,153,0.2)", color: "#34d399" }}
+                          >
+                            {i + 1}
+                          </span>
+                          <span style={{ color: "rgba(255,255,255,0.78)" }}>{step}</span>
+                        </div>
+                      ))}
+                  </div>
                 </div>
               )}
 
-              {/* Actions */}
+              {/* ── AI Confidence ── */}
+              <div className="flex items-center gap-4 px-1">
+                <span className="text-xs shrink-0" style={{ color: "var(--text-muted)" }}>AI Confidence</span>
+                <div className="flex-1 h-2 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.06)" }}>
+                  <motion.div
+                    className="h-full rounded-full"
+                    style={{
+                      background:
+                        (detailData.violation?.confidence_score ?? 0) >= 0.8
+                          ? "#ef4444"
+                          : (detailData.violation?.confidence_score ?? 0) >= 0.6
+                          ? "#f59e0b"
+                          : "#3b82f6",
+                    }}
+                    initial={{ width: 0 }}
+                    animate={{ width: `${((detailData.violation?.confidence_score || 0) * 100)}%` }}
+                    transition={{ duration: 0.9 }}
+                  />
+                </div>
+                <span className="text-xs font-bold shrink-0" style={{ color: "var(--text-primary)" }}>
+                  {((detailData.violation?.confidence_score || 0) * 100).toFixed(0)}% certain
+                </span>
+              </div>
+
+              {/* ── Record Data (collapsible) ── */}
+              {detailData.record && (
+                <details>
+                  <summary
+                    className="text-xs cursor-pointer flex items-center gap-1.5 py-2 px-3 rounded-xl select-none"
+                    style={{ color: "var(--text-muted)", background: "rgba(255,255,255,0.03)", border: "1px solid var(--border)" }}
+                  >
+                    <span className="font-semibold">▶ Record Details — {detailData.record.record_id}</span>
+                  </summary>
+                  <pre
+                    className="mt-2 p-3 rounded-xl text-xs overflow-x-auto"
+                    style={{ background: "rgba(255,255,255,0.03)", color: "rgba(255,255,255,0.5)", border: "1px solid var(--border)" }}
+                  >
+                    {JSON.stringify(detailData.record.data, null, 2)}
+                  </pre>
+                </details>
+              )}
+
+              {/* ── Action Buttons ── */}
               {detailData.violation?.status === "open" && (
-                <div className="flex gap-3">
+                <div className="flex gap-3 pt-1">
                   <button
                     onClick={() => handleAction(detailData.violation.violation_id, "approve")}
-                    className="flex-1 py-3 rounded-xl bg-green-500/15 text-green-400 border border-green-500/20 hover:bg-green-500/25 transition-colors text-sm font-medium"
+                    className="flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all hover:scale-[1.02]"
+                    style={{ background: "rgba(52,211,153,0.12)", color: "#34d399", border: "1px solid rgba(52,211,153,0.2)" }}
                   >
-                    Approve
+                    ✓ Approve
                   </button>
                   <button
                     onClick={() => handleAction(detailData.violation.violation_id, "escalate")}
-                    className="flex-1 py-3 rounded-xl bg-purple-500/15 text-purple-400 border border-purple-500/20 hover:bg-purple-500/25 transition-colors text-sm font-medium"
+                    className="flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all hover:scale-[1.02]"
+                    style={{ background: "rgba(168,85,247,0.12)", color: "#c084fc", border: "1px solid rgba(168,85,247,0.2)" }}
                   >
-                    Escalate
+                    ↑ Escalate
                   </button>
                   <button
                     onClick={() => handleAction(detailData.violation.violation_id, "resolve")}
-                    className="flex-1 py-3 rounded-xl bg-blue-500/15 text-blue-400 border border-blue-500/20 hover:bg-blue-500/25 transition-colors text-sm font-medium"
+                    className="flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all hover:scale-[1.02]"
+                    style={{ background: "rgba(59,130,246,0.12)", color: "#60a5fa", border: "1px solid rgba(59,130,246,0.2)" }}
                   >
-                    Resolve
+                    ✓ Resolve
                   </button>
                 </div>
               )}
@@ -386,6 +502,149 @@ export default function ViolationsPage() {
         </Modal>
       </main>
     </div>
+
+    {/* ─── Agent Single Result Modal ─── */}
+    <Modal isOpen={agentModalOpen} onClose={() => setAgentModalOpen(false)} title="" maxWidth="max-w-2xl">
+      {agentResult && (
+        <div className="space-y-4">
+          {/* Header */}
+          <div className="flex items-center gap-3">
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+              agentResult.status === "success" ? "bg-green-500/20" :
+              agentResult.status === "escalated" ? "bg-amber-500/20" : "bg-red-500/20"
+            }`}>
+              <Bot size={20} className={agentResult.status === "success" ? "text-green-400" : agentResult.status === "escalated" ? "text-amber-400" : "text-red-400"} />
+            </div>
+            <div>
+              <p className="text-white font-semibold">Agent Remediation Complete</p>
+              <p className="text-xs" style={{ color: "var(--text-muted)" }}>{agentResult.violation_id}</p>
+            </div>
+            <span className={`ml-auto px-3 py-1 rounded-full text-xs font-bold ${
+              agentResult.status === "success" ? "bg-green-500/20 text-green-400" :
+              agentResult.status === "escalated" ? "bg-amber-500/20 text-amber-400" :
+              "bg-red-500/20 text-red-400"
+            }`}>
+              {agentResult.status?.toUpperCase()}
+            </span>
+          </div>
+
+          {/* Score Delta */}
+          {agentResult.score_before !== undefined && (
+            <div className="flex items-center gap-4 p-3 rounded-xl" style={{ background: "rgba(99,102,241,0.08)", border: "1px solid rgba(99,102,241,0.2)" }}>
+              <TrendingUp size={16} className="text-indigo-400 shrink-0" />
+              <span className="text-sm" style={{ color: "rgba(255,255,255,0.7)" }}>Compliance Score</span>
+              <span className="text-sm font-mono text-gray-400">{agentResult.score_before}%</span>
+              <ChevronRight size={14} className="text-gray-500" />
+              <span className="text-sm font-mono font-bold text-white">{agentResult.score_after}%</span>
+              {agentResult.score_delta > 0 && (
+                <span className="text-xs font-bold text-green-400 ml-auto">+{agentResult.score_delta}%</span>
+              )}
+            </div>
+          )}
+
+          {/* Final Answer */}
+          <div className="p-4 rounded-xl" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}>
+            <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "var(--text-muted)" }}>Agent Summary</p>
+            <p className="text-sm leading-relaxed" style={{ color: "rgba(255,255,255,0.82)" }}>{agentResult.final_answer}</p>
+          </div>
+
+          {/* Actions taken */}
+          {agentResult.actions_taken?.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider mb-2 flex items-center gap-2" style={{ color: "var(--text-muted)" }}>
+                <ListChecks size={13} /> Actions Taken
+              </p>
+              <div className="space-y-1.5">
+                {agentResult.actions_taken.map((a: string, i: number) => (
+                  <div key={i} className="flex items-start gap-2 text-sm p-2.5 rounded-xl" style={{ background: "rgba(52,211,153,0.06)", border: "1px solid rgba(52,211,153,0.12)" }}>
+                    <span className="w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold shrink-0 mt-0.5" style={{ background: "rgba(52,211,153,0.2)", color: "#34d399" }}>{i + 1}</span>
+                    <span style={{ color: "rgba(255,255,255,0.78)" }}>{a}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ReAct Trace (collapsible) */}
+          {agentResult.steps?.filter((s: any) => s.thought).length > 0 && (
+            <details className="group">
+              <summary className="cursor-pointer text-xs flex items-center gap-2 py-2 px-3 rounded-xl select-none" style={{ color: "var(--text-muted)", background: "rgba(255,255,255,0.03)", border: "1px solid var(--border)" }}>
+                <Bot size={12} /> ▶ Agent Reasoning Trace ({agentResult.steps.filter((s: any) => s.thought).length} steps)
+              </summary>
+              <div className="mt-2 space-y-2">
+                {agentResult.steps.filter((s: any) => s.thought).map((step: any, i: number) => (
+                  <div key={i} className="p-3 rounded-xl text-xs space-y-1.5" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid var(--border)" }}>
+                    {step.thought && <p><span className="text-purple-400 font-semibold">Thought:</span> <span style={{ color: "rgba(255,255,255,0.7)" }}>{step.thought}</span></p>}
+                    {step.action && step.action !== "done" && <p><span className="text-blue-400 font-semibold">Action:</span> <span className="font-mono text-blue-300">{step.action}</span></p>}
+                    {step.observation && <p><span className="text-green-400 font-semibold">Observation:</span> <span style={{ color: "rgba(255,255,255,0.6)" }}>{step.observation.slice(0, 200)}</span></p>}
+                  </div>
+                ))}
+              </div>
+            </details>
+          )}
+        </div>
+      )}
+    </Modal>
+
+    {/* ─── Batch Agent Result Modal ─── */}
+    <Modal isOpen={batchModalOpen} onClose={() => setBatchModalOpen(false)} title="" maxWidth="max-w-2xl">
+      {batchResult && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center">
+              <Zap size={20} className="text-purple-400" />
+            </div>
+            <div>
+              <p className="text-white font-semibold">Batch Agent Run Complete</p>
+              <p className="text-xs" style={{ color: "var(--text-muted)" }}>Processed {batchResult.total_processed || 0} violations</p>
+            </div>
+          </div>
+
+          {batchResult.error ? (
+            <p className="text-red-400 text-sm p-3 rounded-xl" style={{ background: "rgba(239,68,68,0.08)" }}>{batchResult.error}</p>
+          ) : (
+            <>
+              <div className="grid grid-cols-3 gap-3">
+                {[{label: "Resolved", val: batchResult.resolved, color: "#34d399", bg: "rgba(52,211,153,0.1)"},
+                  {label: "Escalated", val: batchResult.escalated, color: "#fbbf24", bg: "rgba(251,191,36,0.1)"},
+                  {label: "Errors", val: batchResult.errors, color: "#f87171", bg: "rgba(239,68,68,0.1)"}].map(({ label, val, color, bg }) => (
+                  <div key={label} className="p-3 rounded-xl text-center" style={{ background: bg }}>
+                    <p className="text-2xl font-bold" style={{ color }}>{val}</p>
+                    <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>{label}</p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="p-3 rounded-xl flex items-center gap-3" style={{ background: "rgba(99,102,241,0.08)", border: "1px solid rgba(99,102,241,0.2)" }}>
+                <TrendingUp size={16} className="text-indigo-400" />
+                <span className="text-sm" style={{ color: "rgba(255,255,255,0.7)" }}>Final Compliance Score:</span>
+                <span className="text-lg font-bold text-white ml-auto">{batchResult.final_compliance_score}%</span>
+              </div>
+
+              {batchResult.results?.length > 0 && (
+                <details>
+                  <summary className="cursor-pointer text-xs flex items-center gap-2 py-2 px-3 rounded-xl select-none" style={{ color: "var(--text-muted)", background: "rgba(255,255,255,0.03)", border: "1px solid var(--border)" }}>
+                    ▶ Full Results ({batchResult.results.length} violations)
+                  </summary>
+                  <div className="mt-2 space-y-1.5 max-h-64 overflow-y-auto">
+                    {batchResult.results.map((r: any, i: number) => (
+                      <div key={i} className="flex items-start gap-2 p-2.5 rounded-xl text-xs" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid var(--border)" }}>
+                        <span className={`shrink-0 px-1.5 py-0.5 rounded font-bold ${
+                          r.status === "success" ? "bg-green-500/20 text-green-400" :
+                          r.status === "escalated" ? "bg-amber-500/20 text-amber-400" : "bg-red-500/20 text-red-400"
+                        }`}>{r.status}</span>
+                        <span className="font-mono text-gray-400 shrink-0">{r.violation_id}</span>
+                        <span style={{ color: "rgba(255,255,255,0.6)" }} className="truncate">{r.summary}</span>
+                      </div>
+                    ))}
+                  </div>
+                </details>
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </Modal>
     </AuthGuard>
   );
 }

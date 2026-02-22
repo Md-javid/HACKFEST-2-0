@@ -49,15 +49,18 @@ async def get_dashboard_stats():
     )
     last_scan = last_scan_doc["completed_at"] if last_scan_doc else None
 
-    # Violations trend (last 7 days simulated)
+    # Violations trend (last 7 days — count per day, not cumulative)
     violations_trend = []
-    for i in range(7, 0, -1):
-        date = datetime.utcnow() - timedelta(days=i)
+    for i in range(6, -1, -1):
+        day_start = (datetime.utcnow() - timedelta(days=i)).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+        day_end = day_start + timedelta(days=1)
         count = await db.violations.count_documents({
-            "detected_at": {"$lte": date}
+            "detected_at": {"$gte": day_start, "$lt": day_end}
         })
         violations_trend.append({
-            "date": date.strftime("%Y-%m-%d"),
+            "date": day_start.strftime("%Y-%m-%d"),
             "violations": count
         })
 
@@ -193,4 +196,4 @@ async def reset_demo():
     from app.core.database import seed_sample_data
     await seed_sample_data()
 
-    return {"message": "All data reset. Sample company records re-seeded."}
+    return {"message": "All data reset and re-seeded. 1 policy, 10 rules, 13 records, 8 violations loaded."}

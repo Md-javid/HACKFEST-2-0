@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.core.database import connect_to_mongo, close_mongo_connection
 from app.services.scheduler import start_scheduler, stop_scheduler
-from app.api.routes import auth, records, policies, violations, dashboard, ai
+from app.api.routes import auth, records, policies, violations, dashboard, ai, agent
 
 
 @asynccontextmanager
@@ -48,6 +48,7 @@ app.include_router(records.router, prefix="/api")
 app.include_router(policies.router, prefix="/api")
 app.include_router(violations.router, prefix="/api")
 app.include_router(dashboard.router, prefix="/api")
+app.include_router(agent.router, prefix="/api")
 app.include_router(ai.router, prefix="/api")
 
 

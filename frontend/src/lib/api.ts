@@ -100,4 +100,29 @@ export const aiPredefinedQuestions = () => api.get("/ai/questions");
 export const aiAnalyzeText = (text: string) =>
   api.post("/ai/analyze-text", { text }, { timeout: 20000 });
 
+// ── Agent (ReAct) ─────────────────────────────────────────────
+export const agentRemediate = (violationId: string) =>
+  api.post(`/agent/remediate/${violationId}`, null, { timeout: 60000 });
+export const agentRemediateBatch = (severity = "critical") =>
+  api.post("/agent/remediate-batch", null, { params: { severity }, timeout: 120000 });
+export const agentLog = (limit = 50) =>
+  api.get("/agent/log", { params: { limit } });
+
+// ── Multi-Agent Orchestrator ──────────────────────────────────
+export const agentOrchestrate = (violationId: string) =>
+  api.post(`/agent/orchestrate/${violationId}`, null, { timeout: 60000 });
+export const agentOrchestrateBatch = (severity = "all") =>
+  api.post("/agent/orchestrate-batch", null, { params: { severity }, timeout: 180000 });
+
+// ── Proactive Intelligence ────────────────────────────────────
+export const agentPredictRisks = (params?: {
+  record_type?: string;
+  department?: string;
+  min_risk_score?: number;
+}) => api.post("/agent/predict-risks", null, { params, timeout: 60000 });
+export const agentSuggestPolicies = () =>
+  api.post("/agent/suggest-policies", null, { timeout: 60000 });
+export const agentSystemStatus = () =>
+  api.get("/agent/status", { timeout: 15000 });
+
 export default api;

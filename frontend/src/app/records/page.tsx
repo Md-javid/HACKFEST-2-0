@@ -18,6 +18,10 @@ import {
   Layers,
   Building2,
   HardDrive,
+  Eye,
+  Tag,
+  Calendar,
+  Hash,
 } from "lucide-react";
 import Sidebar from "@/components/layout/Sidebar";
 import Topbar from "@/components/layout/Topbar";
@@ -63,6 +67,7 @@ export default function RecordsPage() {
   const [typeFilter, setTypeFilter] = useState("");
   const [deptFilter, setDeptFilter] = useState("");
   const [scanning, setScanning] = useState(false);
+  const [selectedRecord, setSelectedRecord] = useState<any>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Manual form
@@ -734,7 +739,8 @@ export default function RecordsPage() {
                           initial={{ opacity: 0 }}
                           animate={{ opacity: 1 }}
                           transition={{ delay: i * 0.02 }}
-                          className="border-b border-white/5 hover:bg-white/5 transition-colors"
+                          onClick={() => setSelectedRecord(r)}
+                          className="border-b border-white/5 hover:bg-white/5 transition-colors cursor-pointer group"
                         >
                           <td className="py-3 px-3 text-white font-mono text-xs">{r.record_id}</td>
                           <td className="py-3 px-3">
@@ -748,13 +754,22 @@ export default function RecordsPage() {
                             {Object.entries(r.data || {}).slice(0, 4).map(([k, v]) => `${k}: ${v}`).join(" | ")}
                           </td>
                           <td className="py-3 px-3 text-right">
-                            <button
-                              onClick={() => handleDelete(r.record_id)}
-                              className="text-red-400/50 hover:text-red-400 p-1"
-                              title="Delete record"
-                            >
-                              <Trash2 size={14} />
-                            </button>
+                            <div className="flex items-center justify-end gap-1">
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setSelectedRecord(r); }}
+                                className="text-blue-400/40 hover:text-blue-400 p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                title="View details"
+                              >
+                                <Eye size={14} />
+                              </button>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); handleDelete(r.record_id); }}
+                                className="text-red-400/50 hover:text-red-400 p-1"
+                                title="Delete record"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
                           </td>
                         </motion.tr>
                       ))}
@@ -770,6 +785,136 @@ export default function RecordsPage() {
             </div>
           </GlassCard>
         </main>
+
+        {/* ─── Record Detail Modal ─── */}
+        <AnimatePresence>
+          {selectedRecord && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setSelectedRecord(null)}
+              className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+            >
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                onClick={(e) => e.stopPropagation()}
+                className="w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-2xl bg-[#0f1117] border border-white/10 shadow-2xl"
+              >
+                {/* Modal Header */}
+                <div className="flex items-start justify-between p-6 border-b border-white/10">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center">
+                      <Database size={20} className="text-blue-400" />
+                    </div>
+                    <div>
+                      <h2 className="text-white font-semibold text-lg font-mono">{selectedRecord.record_id}</h2>
+                      <p className="text-gray-500 text-xs mt-0.5">Record Detail View</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setSelectedRecord(null)}
+                    className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
+
+                {/* Metadata */}
+                <div className="p-6 border-b border-white/10">
+                  <h3 className="text-gray-400 text-xs font-semibold uppercase tracking-wider mb-3">Metadata</h3>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="flex items-center gap-2 bg-white/5 rounded-xl px-3 py-2.5">
+                      <Tag size={14} className="text-blue-400 shrink-0" />
+                      <div>
+                        <p className="text-gray-500 text-xs">Type</p>
+                        <p className="text-white text-sm font-medium capitalize">{selectedRecord.type}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 bg-white/5 rounded-xl px-3 py-2.5">
+                      <Building2 size={14} className="text-purple-400 shrink-0" />
+                      <div>
+                        <p className="text-gray-500 text-xs">Department</p>
+                        <p className="text-white text-sm font-medium">{selectedRecord.department || "—"}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 bg-white/5 rounded-xl px-3 py-2.5">
+                      <Hash size={14} className="text-amber-400 shrink-0" />
+                      <div>
+                        <p className="text-gray-500 text-xs">Source</p>
+                        <p className="text-white text-sm font-medium truncate">{selectedRecord.source || "seed"}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 bg-white/5 rounded-xl px-3 py-2.5">
+                      <Calendar size={14} className="text-green-400 shrink-0" />
+                      <div>
+                        <p className="text-gray-500 text-xs">Imported At</p>
+                        <p className="text-white text-sm font-medium">
+                          {selectedRecord.created_at
+                            ? new Date(selectedRecord.created_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
+                            : "—"}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Data Fields */}
+                <div className="p-6">
+                  <h3 className="text-gray-400 text-xs font-semibold uppercase tracking-wider mb-3">
+                    Data Fields ({Object.keys(selectedRecord.data || {}).length})
+                  </h3>
+                  {Object.keys(selectedRecord.data || {}).length === 0 ? (
+                    <p className="text-gray-500 text-sm">No data fields found.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {Object.entries(selectedRecord.data || {}).map(([key, value]) => {
+                        const isBoolean = typeof value === "boolean";
+                        const isBool = isBoolean ? value : String(value).toLowerCase();
+                        const isTrue = isBool === true || isBool === "true";
+                        const isFalse = isBool === false || isBool === "false";
+                        return (
+                          <div
+                            key={key}
+                            className="flex items-center justify-between gap-4 px-4 py-3 rounded-xl bg-white/5 border border-white/5"
+                          >
+                            <span className="text-gray-400 text-sm font-mono">{key}</span>
+                            {isBoolean || isBool === "true" || isBool === "false" ? (
+                              <span className={`px-2.5 py-1 rounded-lg text-xs font-semibold ${
+                                isTrue ? "bg-green-500/15 text-green-400" : "bg-red-500/15 text-red-400"
+                              }`}>
+                                {isTrue ? "✓ true" : "✗ false"}
+                              </span>
+                            ) : (
+                              <span className="text-white text-sm text-right max-w-[60%] break-words">
+                                {String(value)}
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* Footer */}
+                <div className="flex items-center justify-between px-6 py-4 border-t border-white/10 bg-white/2">
+                  <p className="text-gray-500 text-xs">
+                    {Object.keys(selectedRecord.data || {}).length} fields &middot; {selectedRecord.type} record
+                  </p>
+                  <button
+                    onClick={() => { handleDelete(selectedRecord.record_id); setSelectedRecord(null); }}
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-red-500/10 text-red-400 text-xs font-medium hover:bg-red-500/20 transition-colors"
+                  >
+                    <Trash2 size={13} /> Delete Record
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </AuthGuard>
   );

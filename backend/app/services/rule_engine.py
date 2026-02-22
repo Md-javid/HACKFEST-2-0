@@ -7,6 +7,84 @@ from datetime import datetime, timezone, timedelta
 from app.core.database import get_database
 
 
+_RISK_BY_SEVERITY = {
+    "critical": (
+        "This is a critical security or compliance failure. "
+        "Unresolved, it can lead to data breaches, regulatory sanctions, "
+        "or significant financial penalties. Immediate remediation is required."
+    ),
+    "high": (
+        "This represents a high-priority compliance gap that exposes the organization "
+        "to regulatory penalties, security incidents, or audit findings. "
+        "It should be resolved within the current sprint or release cycle."
+    ),
+    "medium": (
+        "This is a moderate compliance issue that, while not immediately critical, "
+        "increases overall risk exposure. Address it in the next planned review cycle."
+    ),
+    "low": (
+        "This is a low-severity compliance observation. It has limited immediate impact "
+        "but should be tracked and resolved before your next audit or certification renewal."
+    ),
+}
+
+
+def _risk_assessment(severity: str) -> str:
+    return _RISK_BY_SEVERITY.get(
+        severity,
+        "This compliance violation requires review and remediation."
+    )
+
+
+def _human_explanation(rule: dict, record: dict, record_id: str) -> str:
+    """Generate a plain-English explanation of a compliance violation."""
+    condition = rule.get("condition", "")
+    logic = rule.get("validation_logic", {})
+    field = logic.get("field", "")
+    record_name = record.get("data", {}).get("name") or record.get("name") or record_id
+
+    if field == "mfa_enabled":
+        return (
+            f"{record_name} does not have Multi-Factor Authentication (MFA) enabled. "
+            "MFA adds a critical second layer of identity verification and is required for all accounts."
+        )
+    if field == "encryption_enabled":
+        return (
+            f"{record_name} is not encrypted at rest. "
+            "Any sensitive data stored on this asset is at risk of exposure if the storage medium is compromised."
+        )
+    if field == "last_training_date":
+        return (
+            f"{record_name} has not completed the required annual security awareness training. "
+            "Up-to-date training is mandatory to maintain a compliant security posture."
+        )
+    if field == "contract_signed":
+        return (
+            f"Vendor '{record_name}' does not have a signed Data Processing Agreement (DPA) on file. "
+            "A DPA is legally required before sharing any personal data with third parties."
+        )
+    if field == "backup_enabled":
+        return (
+            f"{record_name} does not have automated backups enabled. "
+            "Without regular backups, data loss from incidents cannot be recovered."
+        )
+    if field == "ssl_certificate_valid":
+        return (
+            f"{record_name} has an invalid or expired SSL/TLS certificate. "
+            "All encrypted connections to this server may be compromised or blocked."
+        )
+    if field == "retention_days":
+        return (
+            f"{record_name} has been retaining data beyond the maximum allowed period. "
+            "Excess data retention violates data minimisation requirements and increases breach exposure."
+        )
+    # Generic fallback
+    return (
+        f"Record '{record_name}' does not satisfy the compliance requirement: \"{condition}\". "
+        "Review the record details and apply the suggested remediation."
+    )
+
+
 def evaluate_rule(rule: dict, record: dict) -> bool:
     """
     Evaluate if a record violates a rule based on validation_logic.
@@ -110,14 +188,16 @@ async def run_compliance_scan() -> dict:
                 "record_id": record_id,
                 "policy_id": rule.get("policy_id"),
                 "condition": rule.get("condition", ""),
-                "explanation": f"Record {record_id} violates rule: {rule.get('condition', '')}",
+                "violated_rule": rule.get("condition", ""),
+                "explanation": _human_explanation(rule, record, record_id),
+                "risk_assessment": _risk_assessment(rule.get("severity", "medium")),
                 "confidence_score": 0.85,
                 "severity": rule.get("severity", "medium"),
                 "suggested_remediation": rule.get("required_action", "Review and remediate"),
                 "status": "open",
                 "policy_reference": rule.get("policy_reference", ""),
                 "department": record.get("department", ""),
-                "detected_at": datetime.now(timezone.utc).isoformat(),
+                "detected_at": datetime.now(timezone.utc),  # stored as BSON datetime for range queries
                 "reviewed": False,
                 "needs_human_review": rule.get("severity") in ("critical", "high"),
             })

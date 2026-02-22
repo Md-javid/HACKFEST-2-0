@@ -3,7 +3,11 @@ PolicyPulse AI – Configuration
 """
 from pydantic_settings import BaseSettings
 from typing import Optional
+from pathlib import Path
 import os
+
+# Always resolve .env relative to this file, regardless of cwd
+_ENV_FILE = str(Path(__file__).parent.parent.parent / ".env")
 
 
 class Settings(BaseSettings):
@@ -25,7 +29,7 @@ class Settings(BaseSettings):
     FRONTEND_URL: str = "http://localhost:3000"
 
     class Config:
-        env_file = ".env"
+        env_file = _ENV_FILE
 
 
 settings = Settings()
