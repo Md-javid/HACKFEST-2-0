@@ -1,0 +1,79 @@
+# ===========================================
+# PolicyPulse AI — .gitignore
+# ===========================================
+
+# ─── Python ─────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+.venv/
+venv/
+env/
+ENV/
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
+
+# ─── Environment Variables ───────────────
+.env
+.env.local
+.env.production
+.env.staging
+backend/.env
+frontend/.env
+frontend/.env.local
+
+# ─── Uploads (user data, never commit) ──
+backend/uploads/*
+!backend/uploads/.gitkeep
+uploads/*
+!uploads/.gitkeep
+
+# ─── Node / Frontend ─────────────────────
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/.next/
+frontend/out/
+frontend/.vite/
+.vite/
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ─── IDE & OS ────────────────────────────
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/settings.json
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# ─── Database & Secrets ──────────────────
+*.pem
+*.key
+*.cert
+*.p12
+mongo-data/
+
+# ─── Testing & Coverage ──────────────────
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# ─── Misc ────────────────────────────────
+*.log
+*.tmp
+*.bak
+.cache/
