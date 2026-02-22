@@ -356,7 +356,7 @@ Key endpoints:
 
 <div align="center">
 
-Built with :heart: FOR EVERYONE!
+Built with :heart: by Javi FOR EVERYONE!
 
 **Stack:** Python  FastAPI  React  TypeScript  MongoDB  Google Gemini AI  Docker
 
